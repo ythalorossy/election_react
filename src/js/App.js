@@ -17,11 +17,9 @@ class App extends React.Component {
       voting: false,
     }
 
-    if (typeof web3 != 'undefined') {
-      this.web3Provider = web3.currentProvider
-    } else {
-      this.web3Provider = new Web3.providers.HttpProvider('http://localhost:7545')
-    }
+    this.web3Provider = typeof web3 != 'undefined' 
+      ? web3.currentProvider
+      : new Web3.providers.HttpProvider('http://localhost:7545')
 
     this.web3 = new Web3(this.web3Provider)
 
@@ -32,30 +30,39 @@ class App extends React.Component {
     this.watchEvents = this.watchEvents.bind(this)
   }
 
+  showCandidate = candidate => {
+    const candidates = [...this.state.candidates]
+    candidates.push({
+      id: candidate[0],
+      name: candidate[1],
+      voteCount: candidate[2]
+    });
+    this.setState({ candidates: candidates });
+  }
+
   componentDidMount() {
-    // TODO: Refactor with promise chain
+    
     this.web3.eth.getCoinbase((err, account) => {
-      this.setState({ account })
-      this.election.deployed().then((electionInstance) => {
-        this.electionInstance = electionInstance
-        this.watchEvents()
-        this.electionInstance.candidatesCount().then((candidatesCount) => {
+
+      this.setState({ account });
+
+      this.election.deployed()
+        .then( electionInstance => {
+          this.electionInstance = electionInstance
+          this.watchEvents()
+          return this.electionInstance.candidatesCount()
+        })
+        .then( candidatesCount => {
           for (var i = 1; i <= candidatesCount; i++) {
-            this.electionInstance.candidates(i).then((candidate) => {
-              const candidates = [...this.state.candidates]
-              candidates.push({
-                id: candidate[0],
-                name: candidate[1],
-                voteCount: candidate[2]
-              });
-              this.setState({ candidates: candidates })
-            });
+            this.electionInstance.candidates(i)
+              .then( this.showCandidate );
           }
+        }).then(() => {
+          this.electionInstance.voters( this.state.account )
+          .then( hasVoted  => {
+            this.setState({ hasVoted, loading: false })
+          })
         })
-        this.electionInstance.voters(this.state.account).then((hasVoted) => {
-          this.setState({ hasVoted, loading: false })
-        })
-      })
     })
   }
 
